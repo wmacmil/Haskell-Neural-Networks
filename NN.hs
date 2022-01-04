@@ -47,9 +47,16 @@ matVectProd m v = map (\x -> dot x v) m
 affineTransform :: Rnm -> Rn -> Rn -> Rn
 affineTransform  m x b = vecVecSum (matVectProd m x) b
 
+vec2Mat :: Rn -> Rnm
+vec2Mat = map (:[])
+
+-- >>> map (:[]) [1..2]
+-- [[1],[2]]
+
 -- >>> matMatProd [[1..3],[4..6],[7..9]] [[0,1,0],[1,0,0],[0,0,1]]
 -- [[2.0,1.0,3.0],[5.0,4.0,6.0],[8.0,7.0,9.0]]
--- >>> matMatProd [[1..3]] [[1..3]]
+-- >>> matMatProd [[0],[1]] [[2],[3]]
+-- [[0.0,0.0],[2.0,3.0]]
 matMatProd :: Rnm -> Rnm -> Rnm
 matMatProd m1 m2 = map (\x -> matVectProd m2 x) m1
 
@@ -94,6 +101,9 @@ type TrainingRate           = R
 type GradientDescent        = (TrainData,Network,LossFunction,TrainingRate)
 type LayerError             = Rn
 
+weights :: NetworkWeights -> [LayerWeights]
+weights = map fst
+
 -- >>> map sigmoid ((-5) : 0 : [5])
 -- [6.692851e-3,0.5,0.9933072]
 sigmoid :: ActivationFcn
@@ -116,8 +126,6 @@ sigmaNetwork n = (n,sigmoid)
 --i.e. partially evaluate these below to include a sigmoid
 feedForwardSigmoid is (n,a) = feedForward is (n,sigmoid)
 
-getWeightedInputs :: [(WeightedInput,Activation)] -> [WeightedInput]
-getWeightedInputs = map fst
 
 sigmoid' :: ActivationFcn'
 sigmoid' output = vecVecMul output (vecVecDiff n1s output)
@@ -131,6 +139,16 @@ singleLayer ins (weights,bias) activate =
       activation = map activate weighted -- refactor renaming 'map activate'
   in (weighted,activation)
 
+-- helper function
+
+getWeightedInputs :: [(WeightedInput,Activation)] -> [WeightedInput]
+getWeightedInputs = map fst
+
+getActivations :: [(WeightedInput,Activation)] -> [Activation]
+getActivations = map snd
+
+-- everything here should be classified as compute gradient
+
 -- base case might be wrong, check this
 feedForward :: Input -> Network -> [(WeightedInput,Activation)]
 feedForward ins ([],activate) = [(ins,ins)]
@@ -138,51 +156,94 @@ feedForward ins ((l:ls),activate) =
   let out@(weightedOut,activatedOut) = singleLayer ins l activate
   in out : (feedForward activatedOut (ls,activate))
 
-getActivations :: [(WeightedInput,Activation)] -> [Activation]
-getActivations = map snd
-
 -- z weighted input, a acitvation
-outputError ::
+--compute
+computeOutputError ::
   Output         ->
   WeightedInput  ->
   Activation     ->
   LossFunction'  ->
   ActivationFcn' ->
   LayerError
-outputError out z a lossF actvF = vecVecMul (lossF out a) (actvF z)
+computeOutputError out z a lossF actvF = vecVecMul (lossF out a) (actvF z)
 
 -- TODO transpose all the matrices for backprop
 -- Depth might be unncessary, should be able to recurse on number of
 -- errors and weighted inputs shou
 -- so this network ends at the "beginning" of the network
+-- we've luckily avoided the last layer tho
 backPropError ::
   LayerError      -> -- initial error
   -- Depth           ->    -- could decrease from depth of the network, implicit
   ActivationFcn'  ->
-  NetworkWeights  ->
+  [LayerWeights] ->
   [WeightedInput] ->
   [LayerError]
 backPropError delta_L sigma' ws [] = [] -- outputError
-backPropError delta_L sigma' ((ws,bs):wss) (z:zs) =
+backPropError delta_L sigma' (ws:wss) (z:zs) =
   let delta_l :: LayerError -> LayerError --transpose needed over ws
       delta_l delta_lPlus1 = vecVecMul (matVectProd ws delta_lPlus1) (sigma' z)
       delta_l0 = delta_l delta_L
   in delta_l0 : (backPropError delta_l0 sigma' wss zs)
 
+-- zipwith (+) [1..3] [2..4]
+generateGradients :: [LayerError] -> [Activation] -> (NetworkWeightGradients,NetworkBiasGradients)
+generateGradients delta_s a_s = (zipWith weightupdates delta_s a_s,delta_s )
+  where
+    reverse_a_s = reverse a_s
+    weightupdates delta a = matMatProd (vec2Mat delta) (vec2Mat a)
 
--- type LayerWeightGradients   = Rnm -- dC/dW_ij^l
--- type LayerBiasGradients     = Rn -- dC/dW_ij^l
--- type NetworkWeightGradients = [LayerWeightGradients]
--- type NetworkBiasGradients   = [LayerBiasGradients]
+computeGradient ::
+  Input ->
+  Output ->
+  Network ->
+  LossFunction'  ->
+  ActivationFcn' ->
+  (NetworkWeightGradients,NetworkBiasGradients)
+computeGradient x target n@(weightsAndBiases,_) loss' sigma' =
+  let wghtdInputsAndActvns = feedForward x n
+      weightedInputs               = getWeightedInputs wghtdInputsAndActvns
+      activations                  = getActivations wghtdInputsAndActvns
+      outputError                  = computeOutputError
+                                       target
+                                       (head weightedInputs)
+                                       (head activations)
+                                       loss'
+                                       sigma'
+      transposeWeights             = map transpose (weights weightsAndBiases)
+      networkErrors                = backPropError
+                        outputError
+                        sigma'
+                        transposeWeights
+                        weightedInputs
+  in generateGradients networkErrors activations
 
--- generateOutpus :: [LayerError] -> [Activation] -> (LayerWeightGradients,LayerBiasGradients)
--- generateOutpus (delta_l:delta_ls) a_lss@(a_l:a_ls) = (_ ,_ )
---   where
---     reverseStream = reverse a_lss
+-- feedForward :: Input -> Network -> [(WeightedInput,Activation)]
+
+-- outputError  = computeOutputError
+--                  target               --   Output         ->
+--                  (head weightedInputs)--   WeightedInput  ->
+--                  (head activations)   --   Activation     ->
+--                  loss'                --   LossFunction'  ->
+--                  sigma'               --   ActivationFcn' ->
+--                                            LayerError
+
+-- backPropError :
+--   LayerError      -> -- initial error
+--   -- Depth           ->    -- could decrease from depth of the network, implicit
+--   ActivationFcn'  ->
+--   NetworkWeights  ->
+--   [WeightedInput] ->
+--   [LayerError]
+-- generateGradients :: [LayerError] -> [Activation] -> (NetworkWeightGradients,NetworkBiasGradients)
+-- generateGradients delta_s a_s = (zipWith weightupdates delta_s a_s,delta_s )
+
+
+-- to put it all together
 
 
 -- output :: LayerError -> Activation -> (LayerWeightGradients,LayerBiasGradients)
--- output (x:xs) (a,as) = 
+-- output (x:xs) (a,as) =
 
 -- -- errors and weighted inputs shou
 -- backPropError ::

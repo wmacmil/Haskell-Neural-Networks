@@ -1,3 +1,63 @@
 
 
+There have 
+
+
+Sections :
+
+Motivation and introduction : 
+
+\cite[The Best of the 20th Century]
+
+I speculate that, without a doubt, gradient descent would be on that list today, as it has allowed the profileration of machine learning methods which fall under the category of deep learning. 
+
+Additionally, all algorithms are composed of simpler algorithms, and even
+seemingly unmemorable lemmas merit a place in allowing us to build important
+algorithms. 
+
+An unappreciated algorithm, known by relatively people, would be the
+unification algorithm, Algorithm W, that allows for polymorphic inference of
+Hindley Milnor type systems. This has been used as an ingriedient, or a
+specication, for the construction of Haskell's type-checker, the most widely
+used functional programming type-checker in existence. 
+
+And while the functional programming community is sparsely populated relative
+the machine learning community, with a seemingly large chasm between them, a
+bridge between them is feasible and necessary. Regardless of ones stance on the
+state of deep learning : its use and misuse in application to various domains,
+its energy consumption, dominance in the literare, its pervasiveness in
+mathematics and computer science is undeniable. We take this pervasiveness as
+practical evidence of working on it from the type-theoretical and functional
+programming paradigm.
+
+In addition, I hope that elab
+
+Most important algorithms : gradient desent 
+
+The Lexicon of Machine Learning
+--
+functional anaylsis, differential geometry, tensor calculus, optimization theory
+
+The Lexicon of Haskell
+-- Type theory, functional
+
+one designs a programming language a posteriori, 
+
+even "general purpose programming languages" are domain specific, in the
+loosest sense, that they are trying to iterate on the mistakes, shortcomings,
+and straight up problems of previous programming languages. 
+questions about syntax, compilation, support for 
+
+-- what is a libraries vs domain specific languages  ? 
+
+what are functional specfications good for?
+
+
+-- Following a 
+Neural Networks and Deep Learning by Michael Nielson
+
+Summary Equations for BackPropagation
+
+Computation of the gradient
+
 
