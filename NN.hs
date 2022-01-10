@@ -245,60 +245,65 @@ makeBatches n trainData =
 -- type LayerSize              = Int
 -- type NetworkDepth           = Int
 
+-- type Layer                  = (LayerWeights, LayerBias)
+-- type NetworkWeights         = [Layer]
+
+  -- Note : bias has the same dimension as the output dimension
+
 -- generateRandomNetwork ::
---   Int            -> -- seed
+--   Seed           -> -- seed
 --   [LayerSize]    -> -- include input and output layers, leght >=2
---   -- NetworkDepth   ->
 --   NetworkWeights
--- generateRandomNetwork seed (size:size0:sizes) = _
--- generateRandomNetwork seed (size:size0:sizes) = _
---   -- where
---   --   randomizeLayer = _
---   --   layerWidth = _
+-- generateRandomNetwork _ []  = error "zero layer"
+-- generateRandomNetwork _ [x] = error "one layer only"
+-- generateRandomNetwork seed (size_j:[outputSize]) = _
+-- generateRandomNetwork seed (size_i:size_i1:sizes) =
+--   let (weights_i,biases_i) = initialLayerWeights 
+--   in _
+
+-- ithColumn :: Rnm -> 
+
+-- m : output dimension
+-- n : input dimension
+-- or m by n matrix
+-- could also include the choice of including a bias as input variable
+initialLayerWeights :: Int -> Int -> Seed -> [[Double]]
+initialLayerWeights n m seed = randListList seed (replicate n m)
+
+randListList :: Seed -> [Int] -> [[Double]]
+randListList seed xs =
+  let randStream = map (/20) $ randoms (mkStdGen seed)
+  in randomMatrix xs randStream
+  where
+    randomMatrix :: [Int] -> [Double] -> [[Double]]
+    randomMatrix [] xs = []
+    randomMatrix (length:lengths) str =
+      let (layerOne,rest) = splitAt length str
+      in layerOne : randomMatrix lengths rest
 
 -- for generating random initial weights
 
--- >>> randomList 3 6
--- [2.7870901893892748e-2,2.81191257317836e-3,2.1600613796659333e-2]
--- >>> fst $ splitAt 10 $ snd $ splitAt 10 (randStream 3)
--- [0.6691526198493818,0.25545946031582445,0.8445748363433679,0.5286878094875974,0.7322882841255793,0.7350424276133447,0.4721000032845192,8.065993815509054e-2,0.23423796590225265,0.5642031099938646]
+type Seed = Int
 
--- [2.7870901893892748e-2,2.81191257317836e-3,2.1600613796659333e-2]
+-- >>> length $ initialLayerWeights 3 4 5
+-- 3
+-- >>> map length $ initialLayerWeights 3 4 5
+-- [4,4,4]
 
-randStream seed = randoms (mkStdGen seed) :: [Double]
 
--- something :: Int
+-- >>> map length $ randMatrix 3 [12,10,24]
+-- [12,10,24]
+-- >>> randMatrix 5 [1..3]
+-- [[2.3074222338556875e-2],[1.1194904846104275e-2,4.34651230210506e-2],[2.6872550705278338e-2,2.6826282733822298e-2,2.4910844107770263e-2]]
 
--- something :: [Int] -> [Double] -> [[Double]]
+-- randStream seed = map (/20) $ randoms (mkStdGen seed) :: [Double]
 
--- >>> splitAt 3 (randStream 4)
-
--- >>> randStream 100 4
-
--- >>> splitAt 3 [1,2]
--- ([1,2],[])
-
-rand4100 = randStream 4
-
+-- >>> rand4100 = randStream 4
 -- >>> map length $ randomMatrix [12,10,24] rand4100
--- >>> randomMatrix [1..10] (randStream 5)
---
+-- [12,10,24]
+-- >>> randomMatrix [1..3] (randStream 5)
+-- [[2.3074222338556875e-2],[1.1194904846104275e-2,4.34651230210506e-2],[2.6872550705278338e-2,2.6826282733822298e-2,2.4910844107770263e-2]]
 
-randomMatrix :: [Int] -> [Double] -> [[Double]]
-randomMatrix [] xs = []
-randomMatrix (length:lengths) str = -- []
-  let (layerOne,rest) = splitAt length str
-  in layerOne : randomMatrix lengths rest
-
-
-  -- let (layerOne,rest) = splitAt length $ randStream
-  -- in layerOne : (randomMatrix
-  -- where
-  --   randStream = randoms (mkStdGen seed) :: [Double]
-
-  -- let shuffledData = fst $ shuffle' trainData seed3
-  --     (xss,rest) = splitAt n shuffledData
-  -- in xss : (makeBatches n rest)
 
 randomList :: Int -> Int -> [Double]
 randomList length seed = map (/20) $ take length $ randStream
