@@ -1,6 +1,9 @@
 module NN where
 
+import Shuffle
+-- import Data.List
 import System.Random
+-- import Control.Monad.Random
 
 -- the types give us a framework to refactor the code later, but keep at least the signature
 
@@ -74,10 +77,11 @@ transpose xss@((y : ys) : xs) = (map head xss) : transpose (map tail xss)
 -- distinguish between weights in and weights out
 type ActivationFcn          = R -> R
 type NodeBias               = R
+type NeuronWeights          = Rn
 type Neuron                 = (NeuronWeights, NodeBias) -- perceptron
 type LayerBias              = [NodeBias]
 type LayerSize              = Int
-type NeuronWeights          = Rn
+type NetworkDepth           = Int
 type LayerWeights           = [NeuronWeights]
 type Layer                  = (LayerWeights, LayerBias)
 type NetworkWeights         = [Layer]
@@ -92,6 +96,7 @@ type WeightedInput          = Rn --z
 type Activation             = Rn --a
 type Output                 = Rn
 type ActivationFcn'         = Output -> Rn -- should make this consistent and de-vectorize
+type Inputs                 = [Input]
 type TrainData              = [(Input,Output)]
 type TestData               = [(Input,Output)]
 type Data                   = (TrainData,TestData)
@@ -140,7 +145,6 @@ singleLayer ins (weights,bias) activate =
   in (weighted,activation)
 
 -- helper function
-
 getWeightedInputs :: [(WeightedInput,Activation)] -> [WeightedInput]
 getWeightedInputs = map fst
 
@@ -202,21 +206,140 @@ computeGradient ::
   (NetworkWeightGradients,NetworkBiasGradients)
 computeGradient x target n@(weightsAndBiases,_) loss' sigma' =
   let wghtdInputsAndActvns = feedForward x n
-      weightedInputs               = getWeightedInputs wghtdInputsAndActvns
-      activations                  = getActivations wghtdInputsAndActvns
-      outputError                  = computeOutputError
-                                       target
-                                       (head weightedInputs)
-                                       (head activations)
-                                       loss'
-                                       sigma'
-      transposeWeights             = map transpose (weights weightsAndBiases)
-      networkErrors                = backPropError
-                        outputError
-                        sigma'
-                        transposeWeights
-                        weightedInputs
+      weightedInputs       = getWeightedInputs wghtdInputsAndActvns
+      activations          = getActivations wghtdInputsAndActvns
+      outputError          = computeOutputError
+                               target
+                               (head weightedInputs)
+                               (head activations)
+                               loss'
+                               sigma'
+      transposeWeights     = map transpose (weights weightsAndBiases)
+      networkErrors        = backPropError
+                               outputError
+                               sigma'
+                               transposeWeights
+                               weightedInputs
   in generateGradients networkErrors activations
+
+
+type Batches = [TrainData]
+type BatchSize = Int
+
+-- seed : _
+seed3 = mkStdGen 3
+
+-- >>> splitAt 10 [1..8]
+-- ([1,2,3,4,5,6,7,8],[])
+-- >>> makeBatches 10 [1..91]
+-- [[1,2,3,4,5,6,7,8,9,10],[11,12,13,14,15,16,17,18,19,20],[21,22,23,24,25,26,27,28,29,30],[31,32,33,34,35,36,37,38,39,40],[41,42,43,44,45,46,47,48,49,50],[51,52,53,54,55,56,57,58,59,60],[61,62,63,64,65,66,67,68,69,70],[71,72,73,74,75,76,77,78,79,80],[81,82,83,84,85,86,87,88,89,90],[91]]
+
+-- this is "data invariant"
+makeBatches :: BatchSize -> [a] -> [[a]]
+makeBatches n [] = []
+makeBatches n trainData =
+  let shuffledData = fst $ shuffle' trainData seed3
+      (xss,rest) = splitAt n shuffledData
+  in xss : (makeBatches n rest)
+
+-- type LayerSize              = Int
+-- type NetworkDepth           = Int
+
+-- generateRandomNetwork ::
+--   Int            -> -- seed
+--   [LayerSize]    -> -- include input and output layers, leght >=2
+--   -- NetworkDepth   ->
+--   NetworkWeights
+-- generateRandomNetwork seed (size:size0:sizes) = _
+-- generateRandomNetwork seed (size:size0:sizes) = _
+--   -- where
+--   --   randomizeLayer = _
+--   --   layerWidth = _
+
+-- for generating random initial weights
+
+-- >>> randomList 3 6
+-- [2.7870901893892748e-2,2.81191257317836e-3,2.1600613796659333e-2]
+-- >>> fst $ splitAt 10 $ snd $ splitAt 10 (randStream 3)
+-- [0.6691526198493818,0.25545946031582445,0.8445748363433679,0.5286878094875974,0.7322882841255793,0.7350424276133447,0.4721000032845192,8.065993815509054e-2,0.23423796590225265,0.5642031099938646]
+
+-- [2.7870901893892748e-2,2.81191257317836e-3,2.1600613796659333e-2]
+
+randStream seed = randoms (mkStdGen seed) :: [Double]
+
+-- something :: Int
+
+-- something :: [Int] -> [Double] -> [[Double]]
+
+-- >>> splitAt 3 (randStream 4)
+
+-- >>> randStream 100 4
+
+-- >>> splitAt 3 [1,2]
+-- ([1,2],[])
+
+rand4100 = randStream 4
+
+-- >>> map length $ randomMatrix [12,10,24] rand4100
+-- >>> randomMatrix [1..10] (randStream 5)
+--
+
+randomMatrix :: [Int] -> [Double] -> [[Double]]
+randomMatrix [] xs = []
+randomMatrix (length:lengths) str = -- []
+  let (layerOne,rest) = splitAt length str
+  in layerOne : randomMatrix lengths rest
+
+
+  -- let (layerOne,rest) = splitAt length $ randStream
+  -- in layerOne : (randomMatrix
+  -- where
+  --   randStream = randoms (mkStdGen seed) :: [Double]
+
+  -- let shuffledData = fst $ shuffle' trainData seed3
+  --     (xss,rest) = splitAt n shuffledData
+  -- in xss : (makeBatches n rest)
+
+randomList :: Int -> Int -> [Double]
+randomList length seed = map (/20) $ take length $ randStream
+  where
+    randStream = randoms (mkStdGen seed) :: [Double]
+
+-- type Layer                  = (LayerWeights, LayerBias)
+-- type NetworkWeights         = [Layer]
+-- type Network                = (NetworkWeights,ActivationFcn) -- can be a list of activations
+
+-- >>> foldr (take 10) _ [1..100]
+-- <interactive>:873:9-15: error:
+--     • Couldn't match type ‘[a0]’ with ‘[a] -> [a]’
+--       Expected type: [a0] -> [a] -> [a]
+--         Actual type: [a0] -> [a0]
+--     • Possible cause: ‘take’ is applied to too many arguments
+--       In the first argument of ‘foldr’, namely ‘(take 10)’
+--       In the expression: foldr (take 10) [] [1 .. 100]
+--       In an equation for ‘it’: it = foldr (take 10) [] [1 .. 100]
+--     • Relevant bindings include
+--         it :: [a] (bound at <interactive>:873:2)
+
+-- >>> :t take
+-- take :: Int -> [a] -> [a]
+
+-- >>> fst $ shuffle' [1..10] seed
+-- [4,5,3,10,8,2,7,6,9,1]
+
+-- -- idea : add batches to buckets
+-- choose a random permutaion of the n numbers, (1..n) (i,...,1,..n,..j)
+-- and then speficy which bucket to add it to
+-- genBatches :: BatchSize -> TrainData -> Batches
+-- genBatches size xss@(x:xs) = _
+--   where
+--     numBatches = 1 + div (length xss) size
+
+
+-- Now to actually run *stochastic* gradient desent, we need to
+-- (i) Create random batches of input data, paramaterized by a nat
+-- (ii) Run the batches via some number of epochs
+-- (iii) Initiate random weights to begin with
 
 -- feedForward :: Input -> Network -> [(WeightedInput,Activation)]
 
@@ -309,13 +432,6 @@ computeGradient x target n@(weightsAndBiases,_) loss' sigma' =
 
 -- Example : 2 layer netork, each layer having 5 weights,
 
--- for generating random initial weights
--- >>> randomList 3 3
--- [1.348290170669587e-2,2.8227453280748254e-2,3.719821842745461e-2]
-randomList :: Int -> Int -> [Double]
-randomList length seed = map (/20) $ take 3 $ randStream
-  where
-    randStream = randoms (mkStdGen seed) :: [Double]
 
 
 -- singleHiddenBackProp ::

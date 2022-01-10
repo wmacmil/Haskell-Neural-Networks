@@ -9,7 +9,9 @@ Motivation and introduction :
 
 \cite[The Best of the 20th Century]
 
-I speculate that, without a doubt, gradient descent would be on that list today, as it has allowed the profileration of machine learning methods which fall under the category of deep learning. 
+I speculate that, without a doubt, gradient descent would be on that list today,
+as it has allowed the profileration of machine learning methods which fall under
+the category of deep learning.
 
 Additionally, all algorithms are composed of simpler algorithms, and even
 seemingly unmemorable lemmas merit a place in allowing us to build important
@@ -53,7 +55,17 @@ questions about syntax, compilation, support for
 what are functional specfications good for?
 
 
--- Following a 
+--
+
+Following a methodical description of backpropagation in \cite{Nielson}, we
+
+Differences
+- Indexing vectors is not as efficient, we much to prefer to manipulate them via the standard list operator calculus.
+- We optimize by simply asserting that the derivative of the sigmoid function can be used via values stored after the forward pass.
+- Our implementation is meant to mirror the text of the book, written in latex with mathematical notation, to show that the declarative style used in functional programming matches the intuition and
+- The types and variables names mirror each other. Perhaps this implementation goes a little bit overboard, but we hope that doing this here will indicate how an expressive type system can be used to direct the functions
+
+
 Neural Networks and Deep Learning by Michael Nielson
 
 Summary Equations for BackPropagation
