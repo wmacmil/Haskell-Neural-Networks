@@ -64,6 +64,12 @@ matMatDiff xss yss = zipWith vecVecDiff xss yss
 matMatSum :: Rnm -> Rnm -> Rnm
 matMatSum xss yss = zipWith vecVecSum xss yss
 
+scalarMatMul :: R -> Rnm -> Rnm
+scalarMatMul c yss = map (map (*c)) yss
+
+scalarTensMul :: R -> Rnml -> Rnml
+scalarTensMul c yss = map (map (map (*c))) yss
+
 tensTensSum :: Rnml -> Rnml -> Rnml
 tensTensSum = zipWith matMatSum
 
@@ -220,13 +226,14 @@ generateGradients delta_s a_s = (zipWith weightupdates delta_s a_s,delta_s )
     weightupdates delta a = matMatProd (vec2Mat delta) (vec2Mat a)
 
 computeGradient ::
-  Input ->
-  Output ->
+  (Input,Output) ->
+  -- Input ->
+  -- Output ->
   Network ->
   LossFunction'  ->
   ActivationFcn' ->
   (NetworkWeightGradients,NetworkBiasGradients)
-computeGradient x target n@(weightsAndBiases,_) loss' sigma' =
+computeGradient (x,target) n@(weightsAndBiases,_) loss' sigma' =
   let wghtdInputsAndActvns = feedForward x n
       weightedInputs       = getWeightedInputs wghtdInputsAndActvns
       activations          = getActivations wghtdInputsAndActvns
@@ -244,24 +251,136 @@ computeGradient x target n@(weightsAndBiases,_) loss' sigma' =
                                weightedInputs
   in generateGradients networkErrors activations
 
--- this will be so much easier with lenses
+
+updateWeights ::
+  TrainingRate ->
+  BatchSize ->
+  [(NetworkWeightGradients,NetworkBiasGradients)] ->
+  NetworkWeights ->
+  [LayerWeights] -> -- zeros
+  [LayerBias] ->    -- zeros
+  NetworkWeights
+updateWeights nu m deltas currentWeights weights0 biases0 =
+  let
+    (weightGrads,biasGrads) = unzip deltas
+    (weightsNow,biasNow) = unzip currentWeights
+    rate = (nu / (fromIntegral m))
+    sumBias = scalarMatMul rate $ foldr matMatSum biases0 biasGrads
+    sumWeights = scalarTensMul rate $ foldr tensTensSum weights0 weightGrads
+    updateBias = matMatDiff biasNow sumBias
+    updateWeights = tensTensDiff weightsNow sumWeights
+  in zip updateWeights updateBias
+
+-- initialNetowork = (generateRandomNetwork seed layerSizes, sigma)
+
+-- batchGradients = map (\xy -> computeGradient
+
+  -- Network ->
+  -- LossFunction'  ->
+  -- ActivationFcn' ->
+
+-- computeGradient ::
+--   (Input,Output) ->
+--   -- Input ->
+--   -- Output ->
+--   Network ->
+--   LossFunction'  ->
+--   ActivationFcn' ->
+--   (NetworkWeightGradients,NetworkBiasGradients)
 
 -- updateWeights ::
 --   TrainingRate ->
 --   BatchSize ->
 --   [(NetworkWeightGradients,NetworkBiasGradients)] ->
 --   NetworkWeights ->
+--   [LayerWeights] -> -- zeros
+--   [LayerBias] ->    -- zeros
 --   NetworkWeights
--- updateWeights nu m deltas n =
---   let sumdeltas = foldr (+) -- -- generate zero matricessumMatrices
 
--- updateWeights ::
---   TrainingRate ->
---   BatchSize ->
---   [(NetworkWeightGradients,NetworkBiasGradients)] ->
---   Network ->
---   Network
--- updateWeights nu m deltas (n,sigma) = (_,sigma)
+trainBatch ::
+  TrainingRate ->
+  BatchSize ->
+  TrainData -> -- individual batch
+  Network ->
+  LossFunction'  ->
+  ActivationFcn' ->
+  [LayerWeights] -> -- zeros
+  [LayerBias] ->    -- zeros
+  Network
+trainBatch nu m batch net@(weightBiases,f) loss' sigma' weights0 biases0 =
+  let gradients = map (\b -> computeGradient b net loss' sigma') batch
+      updatedWeights = updateWeights nu m gradients weightBiases weights0 biases0
+  in (updatedWeights,f)
+
+sgd ::
+  Seed ->
+  Int -> -- number of epochs
+  TrainingRate ->
+  BatchSize -> --needed to
+  TrainData -> -- count this as an individual batch
+  [LayerSize] ->
+  ActivationFcn ->
+  ActivationFcn' ->
+  LossFunction'  ->
+  Network
+sgd seed epochs nu m trainData layerSizes sigma sigma' loss' =
+  let initialNetwork = generateRandomNetwork seed layerSizes
+      (weights0,biases0) = unzip $ zeroNetwork layerSizes
+  in sgdhelper seed epochs nu m trainData layerSizes sigma' loss' weights0 biases0 (initialNetwork,sigma)
+
+sgdhelper ::
+  Seed ->
+  Int ->
+  TrainingRate ->
+  BatchSize -> --needed to
+  TrainData -> -- count this as an individual batch
+  [LayerSize] ->
+  ActivationFcn' ->
+  LossFunction'  ->
+  [LayerWeights] -> -- zeros
+  [LayerBias] ->    -- zeros
+  Network ->
+  Network
+sgdhelper seed 0 nu  m trainData layerSizes sigma' loss' weights0 bias0 network = network
+sgdhelper seed epochs nu  m trainData layerSizes sigma' loss' weights0 bias0 net =
+  let foo = singleEpochSGD seed nu m trainData layerSizes sigma' loss' weights0 bias0 net -- hh(net,sig)
+  in sgdhelper seed (epochs-1) nu m trainData layerSizes sigma' loss' weights0 bias0 foo 
+
+-- (batch0:batches) = makeBatches seed m trainData
+singleEpochSGD ::
+  Seed ->
+  TrainingRate ->
+  BatchSize -> --needed to
+  TrainData -> -- count this as an individual batch
+  [LayerSize] ->
+  ActivationFcn' ->
+  LossFunction'  ->
+  [LayerWeights] -> -- zeros
+  [LayerBias] ->    -- zeros
+  Network ->
+  Network
+-- singleEpochSGD seed nu m trainData layerSizes sigma' loss' weights0 biases0 n = n
+singleEpochSGD seed nu m trainData layerSizes sigma' loss' weights0 biases0 n =
+  let batches = makeBatches seed m trainData
+  in stochasticGradientDescentOnBatch seed nu m batches layerSizes sigma' loss' weights0 biases0 n
+
+-- (batch0:batches) = makeBatches seed m trainData
+stochasticGradientDescentOnBatch ::
+  Seed ->
+  TrainingRate ->
+  BatchSize -> --needed to
+  [TrainData] -> -- count this as an individual batch
+  [LayerSize] ->
+  ActivationFcn' ->
+  LossFunction'  ->
+  [LayerWeights] -> -- zeros
+  [LayerBias] ->    -- zeros
+  Network ->
+  Network
+stochasticGradientDescentOnBatch seed nu m [] layerSizes sigma' loss' weights0 biases0 n = n
+stochasticGradientDescentOnBatch seed nu m (batch0:batches) layerSizes sigma' loss' weights0 biases0 n =
+  let n' = trainBatch nu m batch0 n loss' sigma' weights0 biases0
+  in stochasticGradientDescentOnBatch seed nu m batches layerSizes sigma' loss' weights0 biases0 n'
 
 type Batches = [TrainData]
 type BatchSize = Int
@@ -308,21 +427,9 @@ generateRandomNetwork seed sizes =
 --   let batches = makeBatches seed batchSize trainData
 -- batchTrainRate = nu / batchSize
 
--- stochasticGradientDescentOnBatch ::
---   Seed ->
---   TrainingRate ->
---   BatchSize -> --needed to
---   TrainData ->
---   [LayerSize] ->
---   ActivationFcn ->
---   ActivationFcn' ->
---   LossFunction'  ->
---   (NetworkWeightGradients,NetworkBiasGradients)
--- stochasticGradientDescentOnBatch seed nu batchSize trainData layerSizes sigma sigma' loss' =
---   let initialNetowork = (generateRandomNetwork seed layerSizes, sigma)
---   in _
 
--- computeGradient x target n@(weightsAndBiases,_) loss' sigma' =
+
+-- Helper Functions Below --
 
 -- m : input dimension
 -- n : output dimension
@@ -357,11 +464,6 @@ spliceData xs n =
   in nxs : spliceData rest n
 
 
--- Now to actually run *stochastic* gradient desent, we need to
--- (i) Create random batches of input data, paramaterized by a nat
--- (ii) Run the batches via some number of epochs
--- (iii) Initiate random weights to begin with
-
 -- >>> makeBatches 4 2 [1..9]
 -- [[6,1],[2,5],[9,4],[3,8],[7]]
 
@@ -383,8 +485,6 @@ spliceData xs n =
 -- >>> extractHeads [[1,2,3],[4,5,6]]
 -- ([[2,3],[5,6]],[1,4])
 
--- >>> fst $ shuffle' [1..10] (mkStdGen 3)
--- [4,5,3,10,8,2,7,6,9,1]
 
 
 -- feedForward :: Input -> Network -> [(WeightedInput,Activation)]
@@ -397,63 +497,10 @@ spliceData xs n =
 --                  sigma'               --   ActivationFcn' ->
 --                                            LayerError
 
--- backPropError :
---   LayerError      -> -- initial error
---   -- Depth           ->    -- could decrease from depth of the network, implicit
---   ActivationFcn'  ->
---   NetworkWeights  ->
---   [WeightedInput] ->
---   [LayerError]
--- generateGradients :: [LayerError] -> [Activation] -> (NetworkWeightGradients,NetworkBiasGradients)
--- generateGradients delta_s a_s = (zipWith weightupdates delta_s a_s,delta_s )
 
 
--- to put it all together
-
-
--- output :: LayerError -> Activation -> (LayerWeightGradients,LayerBiasGradients)
--- output (x:xs) (a,as) =
-
--- -- errors and weighted inputs shou
--- backPropError ::
---   Depth          ->
---   ActivationFcn' ->
---   NetworkWeights ->
---   [WeightedInput]  ->
---   [LayerError]
--- backPropError 0 ws sigma' (z:zs) = [] -- outputError
--- backPropError d sigma' ((ws,bs):wss) (z:zs) = (helper) : (backPropError (d-1) sigma' wss zs)
---   where
---     helper :: LayerError
---       -- Depth          ->
---       -- ActivationFcn' ->
---       -- NetworkWeights ->
---       -- WeightedInput  ->
---       -- LayerError
---     helper =
---       let delta_lPlus1 = helper (d-1) sigma' wss zs
---           delta_l = vecVecMul (matVectProd ws delta_lPlus1) (sigma' z) --transpose needed
---       in _
-
-
-
--- trainOnExample :: (Input,Output) -> Network -> LossFunction -> Network
--- trainOnExample (i,output) n = _
---   where
---     localOutput = feedForward i n
---     deltaOut = vecVecDiff output localOutput
-
-  -- manyLayer ::
--- manyLayer i ([],activate) = i
--- manyLayer i ((l:ls),activate) =
---   manyLayer (singleLayer i l activate) (ls,activate)
-
-
--- meanSquaredError :: LossFunction
--- meanSquaredError yObserved yPrededicted =
 
 -- TODO :
---   * Batchify
 --   * Momenumify
 --   * Generalize
 --   * Rector to have better random geneartion possibility
@@ -461,37 +508,6 @@ spliceData xs n =
 --     + i.e. make functions that give the network implicitly, vs just some
 --       layer parameter (d = depth, bread_i and acitivation_i for i in depth),
 --       more generality
-
--- backpropogation ::
---   TrainData ->
---   TrainingRate ->
---   -- Activation ->
---   LossFunction ->
---   Network -> -- randomized initial weights
---   Network -> -- new network with trained output weights
--- backpropogation (ins,targetOuts) nu loss (weights,f) = (updatedWeights,f)
---   where
---     updatedWeights :: NetworkWeights
---     updatedWeights = _
---     outputs = map manyLayer ins
-
-
--- Example : 2 layer netork, each layer having 5 weights,
-
-
-
--- singleHiddenBackProp ::
---   TrainData ->
---   TrainingRate ->
---   LossFunction ->
---   Network -> -- randomized initial weights
---   Network -> -- new network with trained output weights
--- backpropogation (ins,targetOuts) nu loss (weights,f) = (updatedWeights,f)
---   where
---     updatedWeights :: NetworkWeights
---     updatedWeights = _
---     outputs = map manyLayer ins
-
 
 -- type Bactivation = Activation --for backprop
 -- -- can change this to adjust for semantic
@@ -509,17 +525,11 @@ spliceData xs n =
 -- manyLayer i ((l:ls),activate) =
 --   manyLayer (singleLayer i l activate) (ls,activate)
 
--- meanSqError :: ErrorFunction
--- meanSqError =
 
 -- -- >>> map (relu . (*) (-1)) ([1..10] ++ [-1,-2])
 -- -- [0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,2.0]
 -- relu :: ActivationFcn
 -- relu x = max 0 x
-
-
--- initializeLayerWeights :: Layer
--- initializeNetwork :: Activation -> Network
 
 -- sgn :: R -> Bool
 -- sgn x = if x > 0 then True else False
@@ -527,13 +537,3 @@ spliceData xs n =
 -- --could define neutral neuron with sgn
 -- perceptron :: Neuron -> Input -> Bool
 -- perceptron (w,b) i = sgn (dot w i)
-
-
--- type Layer = ([NeuronWeights], LayerBias, Activation)
--- type Network = [Layer]
--- test with quickcheck
--- import Test.QuickCheck
--- import Util hiding (replicate)
--- vectors as lists, first order approximation
--- refactor with Data.Vector zipWithG
--- refactor with linear, or hmatrix
