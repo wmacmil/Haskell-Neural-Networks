@@ -179,7 +179,9 @@ previous batch.
 
 The "trainBatch" function has to find the average weight and bias update
 recommended over the batch, and does so by calculating the gradients using
-"computeGradient" for every training example in the batch, and updateWeights
+"computeGradient" for every training example in the batch, and "updateWeights"
+actually updates the weights and biases with the gradients which have been
+computed in the parent trainBatch function.
 
 -}
 
